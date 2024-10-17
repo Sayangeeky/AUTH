@@ -37,7 +37,7 @@ app.get('/', (req, res) => res.send('API is running'));
 
 // Error Handling Middleware
 app.use((err, req, res, next) => {
-    console.error(err.stack); // Log error stack
+    console.error(err.stack); 
     res.status(err.status || 500).json({
         success: false,
         message: err.message || 'Server Error',
@@ -48,4 +48,4 @@ app.use((err, req, res, next) => {
 
 // Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server started on port ${PORT}...`));
+app.listen(PORT, () => console.log(`Server started on port ${PORT}... `));
