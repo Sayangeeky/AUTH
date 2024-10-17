@@ -14,7 +14,8 @@ const {
 require('dotenv').config();
 const { z } = require('zod');
 
-const TemporaryUsers = {}; // In-memory store for temporary users
+const TemporaryUsers = {};
+
 
 // Signup Controller
 exports.signup = async (req, res) => {
@@ -24,10 +25,29 @@ exports.signup = async (req, res) => {
         // Validate
         UserSchemaZod.parse(req.body);
 
-        // Check if user exists
+        // Check if user already exists in the database
         let user = await User.findOne({ email });
         if (user) {
             return res.status(400).json({ msg: 'User already exists' });
+        }
+
+        // Check if user exists in temporary storage
+        const tempUser = TemporaryUsers[email];
+        if (tempUser) {
+            // User exists in temporary storage, use that data to create the final user
+            const hashedPassword = tempUser.password; // Use the hashed password from temporary storage
+            const newUser = new User({
+                firstName: tempUser.firstName,
+                lastName: tempUser.lastName,
+                email: tempUser.email,
+                password: hashedPassword,
+                isVerified: true, // User is verified
+            });
+
+            await newUser.save();
+            delete TemporaryUsers[email]; // Remove from memory after saving
+
+            return res.status(200).json({ msg: 'User registered successfully' });
         }
 
         // Hash password
@@ -35,7 +55,7 @@ exports.signup = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, salt);
 
         // Create a temporary user object
-        const tempUser = {
+        const newTempUser = {
             firstName,
             lastName,
             email,
@@ -46,7 +66,7 @@ exports.signup = async (req, res) => {
         };
 
         // Store in-memory
-        TemporaryUsers[email] = tempUser;
+        TemporaryUsers[email] = newTempUser;
 
         res.status(200).json({ msg: 'Please verify your email.' });
 
@@ -58,6 +78,8 @@ exports.signup = async (req, res) => {
         res.status(500).send('Server error');
     }
 };
+
+
 
 // Verify Mail and Confirm OTP Controller
 exports.verifyMail = async (req, res) => {
@@ -85,19 +107,10 @@ exports.verifyMail = async (req, res) => {
                 return res.status(400).json({ msg: 'OTP Expired' });
             }
 
-            // Create and save the new user in the database
-            const newUser = new User({
-                firstName: tempUser.firstName,
-                lastName: tempUser.lastName,
-                email: tempUser.email,
-                password: tempUser.password,
-                isVerified: true,
-            });
+            // Inform the user that they need to sign up again
+            // delete TemporaryUsers[email]; // Remove from memory
 
-            await newUser.save();
-            delete TemporaryUsers[email]; // Remove from memory
-
-            return res.status(200).json({ msg: 'Email verified successfully. Registration complete.' });
+            return res.status(200).json({ msg: 'Email verified successfully. Please sign up again to complete registration.' });
 
         } else {
             // If OTP is not provided, generate and send it
